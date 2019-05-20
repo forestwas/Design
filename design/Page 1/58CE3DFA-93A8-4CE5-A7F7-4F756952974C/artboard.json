@@ -56,6 +56,10 @@
     {
       "class": "text",
       "id": "C21B8537-94C8-428B-8627-6F2403A49F90"
+    },
+    {
+      "class": "rectangle",
+      "id": "AEF76FA1-AC4D-4183-8679-4503D84FD597"
     }
   ],
   "name": "Artboard",
