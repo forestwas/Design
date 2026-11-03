@@ -1,11 +1,18 @@
 # Halı Saha Kadro
 
-WhatsApp’a PNG olarak paylaşılabilen FIFA tarzı iki takımlı halı saha kadro kartı.
+Telefon-first FIFA tarzı halı saha kadro uygulaması.
 
-- Kişi sayısı: 6 / 7 / 8 (kaleci hariç)
-- Kaleci opsiyonel (kiralanıyorsa kapalı)
-- Skor girişi ve Pazartesi maç geçmişi (`localStorage`)
-- Kartı PNG indir
+## Özellikler
+
+- 6 / 7 / 8 kişi, opsiyonel kaleci
+- Bölgeler: Kaleci · Defans · Ortasaha · Forvet
+- Yuvarlağı sürükle → bölgeye bırak → otomatik grid
+- İsim: `Ahmet Yılmaz` → sahada `A. Yılmaz` (dokunarak düzenle)
+- Gol sayısı → geçmişte ⚽ ikonu
+- Gol krallığı + anonim maçın adamı oyları (kendine oy yok; voter→aday saklanmaz)
+- Editör girişi (PIN, varsayılan `pazartesi`); `?view=share` salt okunur
+- Kişi kaydı + opsiyonel foto (yuvarlak içinde)
+- PNG indir (WhatsApp)
 
 ## Çalıştırma
 
@@ -14,9 +21,10 @@ npm install
 npm run dev
 ```
 
-Production build:
+## Veri
 
-```bash
-npm run build
-npm run preview
-```
+Şimdilik **tarayıcı localStorage** (ücretsiz). Çok cihaz / bulut için hazır şema: [`supabase/schema.sql`](supabase/schema.sql).
+
+Yeni Supabase projesi bu org’da ~$10/ay görünüyor; onaylarsan bağlarız. Alternatif: mevcut boş bir free-tier proje.
+
+Canlı: https://hali-saha-kadro.vercel.app

@@ -1,57 +1,5 @@
-/** Formation rows from own goal (bottom for teamA, mirrored for teamB). */
-const FORMATIONS = {
-  6: [2, 2, 2],
-  7: [2, 3, 2],
-  8: [3, 3, 2],
-};
-
-/**
- * Build absolute pitch positions (percent) for one team.
- * @param {'A'|'B'} side A = bottom half, B = top half
- * @param {number} playerCount
- * @param {boolean} gkEnabled
- */
-export function buildSlots(side, playerCount, gkEnabled) {
-  const rows = FORMATIONS[playerCount] || FORMATIONS[6];
-  const slots = [];
-  let index = 1;
-
-  const halfRows = rows.length;
-  // Field player Y bands within own half (0–50 top, 50–100 bottom)
-  const isA = side === 'A';
-
-  if (gkEnabled) {
-    slots.push({
-      id: `${side}-gk`,
-      role: 'gk',
-      number: 1,
-      x: 50,
-      y: isA ? 94 : 6,
-    });
-  }
-
-  // rows[0] = defenders (closest to own GK), last = attackers (toward midfield)
-  rows.forEach((count, rowIndex) => {
-    const t = (rowIndex + 1) / (halfRows + 1);
-    // Team A: from near own goal (high y) toward midfield (y~52)
-    // Team B: from near own goal (low y) toward midfield (y~48)
-    const y = isA ? 92 - t * 40 : 8 + t * 40;
-
-    for (let i = 0; i < count; i++) {
-      const x = ((i + 1) / (count + 1)) * 100;
-      slots.push({
-        id: `${side}-p${index}`,
-        role: 'outfield',
-        number: gkEnabled ? index + 1 : index,
-        x,
-        y,
-      });
-      index += 1;
-    }
-  });
-
-  return slots;
-}
+import { layoutTeam, ZONE_LABELS, ZONES, zoneY } from './zones.js';
+import { formatShortName } from './names.js';
 
 export function pitchSvg() {
   return `
@@ -60,11 +8,9 @@ export function pitchSvg() {
       <line x1="2" y1="70" x2="98" y2="70" stroke="rgba(255,255,255,0.5)" stroke-width="0.5"/>
       <circle cx="50" cy="70" r="10" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.5"/>
       <circle cx="50" cy="70" r="0.8" fill="rgba(255,255,255,0.7)"/>
-      <!-- Top penalty -->
       <rect x="22" y="2" width="56" height="22" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="0.5"/>
       <rect x="34" y="2" width="32" height="10" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="0.5"/>
       <path d="M 38 24 A 12 12 0 0 0 62 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
-      <!-- Bottom penalty -->
       <rect x="22" y="116" width="56" height="22" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="0.5"/>
       <rect x="34" y="128" width="32" height="10" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="0.5"/>
       <path d="M 38 116 A 12 12 0 0 1 62 116" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
@@ -72,35 +18,55 @@ export function pitchSvg() {
   `;
 }
 
-export function renderPitch(container, match, { interactive = true } = {}) {
-  const slotsA = buildSlots('A', match.playerCount, match.teamA.gkEnabled);
-  const slotsB = buildSlots('B', match.playerCount, match.teamB.gkEnabled);
+function zoneBandsHtml(side) {
+  return ZONES.map((z) => {
+    const y = zoneY(side, z);
+    return `<div class="zone-band zone-band--${side}" data-side="${side}" data-zone="${z}" style="top:${y}%" title="${ZONE_LABELS[z]}"></div>`;
+  }).join('');
+}
 
-  const nameMap = new Map();
-  for (const p of match.teamA.players || []) nameMap.set(p.slot, p.name || '');
-  for (const p of match.teamB.players || []) nameMap.set(p.slot, p.name || '');
-  if (match.teamA.gkEnabled) nameMap.set('A-gk', match.teamA.gkName || '');
-  if (match.teamB.gkEnabled) nameMap.set('B-gk', match.teamB.gkName || '');
+export function renderPitch(container, match, options = {}) {
+  const {
+    interactive = true,
+    showGoals = true,
+    voteCounts = {},
+  } = options;
+
+  const slotsA = layoutTeam('A', match.teamA.players || []);
+  const slotsB = layoutTeam('B', match.teamB.players || []);
 
   const playerHtml = (slot, team) => {
-    const name = nameMap.get(slot.id) || '';
-    const color = team.color;
-    const editable = interactive
-      ? `contenteditable="true" data-slot="${slot.id}" spellcheck="false"`
-      : '';
+    const short = formatShortName(slot.fullName) || (interactive ? 'İsim' : '');
+    const goals = Number(slot.goals) || 0;
+    const ball = showGoals && goals > 0 ? `<span class="player__ball" title="${goals} gol">⚽${goals > 1 ? goals : ''}</span>` : '';
+    const votes = voteCounts[slot.id] || 0;
+    const star = votes > 0 ? `<span class="player__votes" title="${votes} oy">★${votes}</span>` : '';
+    const photo = slot.photoUrl
+      ? `<img class="player__photo" src="${escapeAttr(slot.photoUrl)}" alt="" />`
+      : `<span class="player__num">${slot.number}</span>`;
+
     return `
-      <button type="button" class="player ${slot.role === 'gk' ? 'player--gk' : ''}"
-        style="left:${slot.x}%;top:${slot.y}%;--kit:${color}"
-        data-slot="${slot.id}" ${interactive ? '' : 'tabindex="-1"'}>
-        <span class="player__kit"><span class="player__num">${slot.number}</span></span>
-        <span class="player__name" ${editable}>${escapeHtml(name) || (interactive ? 'İsim' : '')}</span>
-      </button>
+      <div class="player ${slot.zone === 'gk' ? 'player--gk' : ''}"
+        style="left:${slot.x}%;top:${slot.y}%;--kit:${team.color}"
+        data-player-id="${slot.id}"
+        data-side="${slot.side}"
+        data-zone="${slot.zone}"
+        ${interactive ? 'data-draggable="1"' : ''}>
+        <div class="player__kit">${photo}${ball}${star}</div>
+        <button type="button" class="player__name" data-edit-id="${slot.id}" ${interactive ? '' : 'tabindex="-1"'}>
+          ${escapeHtml(short)}
+        </button>
+      </div>
     `;
   };
 
   container.innerHTML = `
-    <div class="pitch">
+    <div class="pitch" id="pitch-surface">
       ${pitchSvg()}
+      <div class="pitch__zones" aria-hidden="true">
+        ${zoneBandsHtml('B')}
+        ${zoneBandsHtml('A')}
+      </div>
       <div class="pitch__players">
         ${slotsB.map((s) => playerHtml(s, match.teamB)).join('')}
         ${slotsA.map((s) => playerHtml(s, match.teamA)).join('')}
@@ -110,39 +76,105 @@ export function renderPitch(container, match, { interactive = true } = {}) {
 }
 
 function escapeHtml(str) {
-  return String(str)
+  return String(str ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
 }
 
-/** Collect player names from current pitch DOM into match object (mutates). */
-export function collectNamesFromPitch(root, match) {
-  const nodes = root.querySelectorAll('.player__name[data-slot]');
-  const aPlayers = [];
-  const bPlayers = [];
+function escapeAttr(str) {
+  return escapeHtml(str).replaceAll("'", '&#39;');
+}
 
-  nodes.forEach((el) => {
-    const slot = el.dataset.slot;
-    const name = (el.textContent || '').replace(/\u00a0/g, ' ').trim();
-    const placeholder = name === 'İsim' ? '' : name;
+/**
+ * Bind pointer drag on pitch. Calls onDrop({playerId, fromSide, toSide, toZone}).
+ */
+export function bindPitchInteractions(root, { canEdit, onEditName, onDrop }) {
+  if (!canEdit) {
+    root.querySelectorAll('[data-edit-id]').forEach((btn) => {
+      btn.addEventListener('click', (e) => e.preventDefault());
+    });
+    return;
+  }
 
-    if (slot === 'A-gk') {
-      match.teamA.gkName = placeholder;
-      return;
-    }
-    if (slot === 'B-gk') {
-      match.teamB.gkName = placeholder;
-      return;
-    }
-    if (slot.startsWith('A-')) {
-      aPlayers.push({ slot, name: placeholder });
-    } else if (slot.startsWith('B-')) {
-      bPlayers.push({ slot, name: placeholder });
-    }
+  root.querySelectorAll('[data-edit-id]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onEditName?.(btn.dataset.editId);
+    });
   });
 
-  match.teamA.players = aPlayers;
-  match.teamB.players = bPlayers;
+  const surface = root.querySelector('#pitch-surface');
+  if (!surface) return;
+
+  let drag = null;
+
+  const onPointerDown = (e) => {
+    const el = e.target.closest('.player[data-draggable]');
+    if (!el) return;
+    if (e.target.closest('[data-edit-id]')) return;
+
+    e.preventDefault();
+    const rect = surface.getBoundingClientRect();
+    drag = {
+      el,
+      playerId: el.dataset.playerId,
+      fromSide: el.dataset.side,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      moved: false,
+      offsetX: 0,
+      offsetY: 0,
+      rect,
+    };
+    el.setPointerCapture(e.pointerId);
+    el.classList.add('is-dragging');
+  };
+
+  const onPointerMove = (e) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    if (Math.hypot(dx, dy) > 6) drag.moved = true;
+    drag.el.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    drag.el.style.zIndex = '20';
+  };
+
+  const onPointerUp = (e) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const { el, playerId, fromSide, moved, rect } = drag;
+    el.classList.remove('is-dragging');
+    el.style.transform = '';
+    el.style.zIndex = '';
+
+    if (moved) {
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      void x;
+      // Import hit test inline to avoid circular deps at top during bind
+      import('./zones.js').then(({ hitTestSide, hitTestZone }) => {
+        const toSide = hitTestSide(y);
+        let toZone = hitTestZone(toSide, y);
+        // Crossing midfield into other team: keep same relative zone intent
+        if (!toZone) {
+          toZone = hitTestZone(fromSide, y) || 'mid';
+        }
+        // Only allow drop on same team
+        if (toSide !== fromSide) {
+          drag = null;
+          return;
+        }
+        onDrop?.({ playerId, fromSide, toSide, toZone, y });
+      });
+    }
+
+    drag = null;
+  };
+
+  surface.addEventListener('pointerdown', onPointerDown);
+  surface.addEventListener('pointermove', onPointerMove);
+  surface.addEventListener('pointerup', onPointerUp);
+  surface.addEventListener('pointercancel', onPointerUp);
 }
