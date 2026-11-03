@@ -27,3 +27,11 @@ Temporary Items
 
 # Sketch files
 *.sketch
+
+# Node / Vite
+node_modules/
+dist/
+.DS_Store
+*.local
+.vite/
+test-screenshots/
