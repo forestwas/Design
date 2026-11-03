@@ -1,4 +1,4 @@
-import { layoutTeam, ZONE_LABELS, ZONES, zoneY } from './zones.js';
+import { layoutTeam, ZONE_LABELS, ZONES, zoneY, hitTestSide, hitTestZone } from './zones.js';
 import { formatShortName } from './names.js';
 
 export function pitchSvg() {
@@ -150,24 +150,13 @@ export function bindPitchInteractions(root, { canEdit, onEditName, onDrop }) {
     el.style.zIndex = '';
 
     if (moved) {
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
-      void x;
-      // Import hit test inline to avoid circular deps at top during bind
-      import('./zones.js').then(({ hitTestSide, hitTestZone }) => {
-        const toSide = hitTestSide(y);
-        let toZone = hitTestZone(toSide, y);
-        // Crossing midfield into other team: keep same relative zone intent
-        if (!toZone) {
-          toZone = hitTestZone(fromSide, y) || 'mid';
-        }
-        // Only allow drop on same team
-        if (toSide !== fromSide) {
-          drag = null;
-          return;
-        }
+      const toSide = hitTestSide(y);
+      let toZone = hitTestZone(toSide, y);
+      if (!toZone) toZone = hitTestZone(fromSide, y) || 'mid';
+      if (toSide === fromSide) {
         onDrop?.({ playerId, fromSide, toSide, toZone, y });
-      });
+      }
     }
 
     drag = null;
